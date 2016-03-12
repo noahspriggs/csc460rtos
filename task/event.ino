@@ -12,6 +12,12 @@ volatile static unsigned int numberofevents = 0;
 EVENT Kernel_Event_Init(void)
 {
 	EVENT eid = numberofevents;
+
+	if(numberofevents == MAXEVENT) {
+		// ILLEGAL STATE, LOOP FOREVER, TOO MANY EVENTS
+		for (;;);
+	}
+
 	numberofevents++;
 
 	EVENT_DESCRIPTOR* evt = &(events[eid]);

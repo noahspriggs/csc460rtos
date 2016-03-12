@@ -13,6 +13,12 @@ volatile static unsigned int numberofmutexes = 0;
 
 MUTEX Kernel_Mutex_Init() {
 	MUTEX mid = numberofmutexes;
+
+	if(numberofmutexes == MAXMUTEX) {
+		// ILLEGAL STATE, LOOP FOREVER, TOO MANY MUTEXES
+		for (;;);
+	}
+
 	numberofmutexes++;
 
 	MUTEX_DESCRIPTOR* mut = &(mutexes[mid]);
