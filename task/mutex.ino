@@ -50,17 +50,17 @@ void Kernel_Mutex_Lock(MUTEX m) {
 
 		// promote the process with the lock to the highest priority in the queue
 		// or it's original priority, whichever is higher
-		PRIORITY current_max = mut->current_owner_original_priority;
+		PRIORITY current_min = mut->current_owner_original_priority;
 		for (i = 0; i < mut->queue_length; i++)
 		{
-			if (Process[mut->queue[i]].pid > current_max)
+			if (Process[mut->queue[i]].pid < current_min)
 			{
-				current_max = Process[mut->queue[i]].pid;
+				current_min = Process[mut->queue[i]].pid;
 			}
 		}
 
 		// actually set the new priority
-		Process[mut->owner].priority = current_max;
+		Change_Priority(mut->owner, current_min);
 
 		// now block the current process
 		Cp->state = BLOCKED;
@@ -90,18 +90,18 @@ void Kernel_Mutex_Unlock(MUTEX m) {
 				mut->owner = mut->queue[0];
 				mut->locked = 1;
 				mut->current_owner_original_priority = Process[mut->owner].priority;
-				
+
 				// shuffle the queue along (and keep note of the max priortiy) becuase we need
 				// to promote the process with the lock to the highest priority in the queue
 				// or it's original priority, whichever is higher
-				PRIORITY current_max = mut->current_owner_original_priority;
+				PRIORITY current_min = mut->current_owner_original_priority;
 
 				for (i = 1; i < mut->queue_length; i++)
 				{
 					// update maximum
-					if (Process[mut->queue[i]].pid > current_max)
+					if (Process[mut->queue[i]].pid < current_min)
 					{
-						current_max = Process[mut->queue[i]].pid;
+						current_min = Process[mut->queue[i]].pid;
 					}
 
 					// shuffle queue along
@@ -109,7 +109,7 @@ void Kernel_Mutex_Unlock(MUTEX m) {
 				}
 
 				// actually set the new priority
-				Process[mut->owner].priority = current_max;
+				Change_Priority(mut->owner, current_min);
 
 				// and shorten the queue
 				mut->queue_length--;
@@ -137,7 +137,7 @@ void Kernel_Mutex_Unlock(MUTEX m) {
 		} // endif locked == 0
 	} // endif we're the owner
 	else // not our mutex, not allowed to unlock it
-	{ 
+	{
 		// ILLEGAL OPERATION, LOOP FOREVER
 		for (;;);
 	}
