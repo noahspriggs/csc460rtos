@@ -18,7 +18,6 @@ PD Process[MAXTHREAD];
 volatile PD* Cp;
 
 
-volatile unsigned int NextP;
 
 /** number of tasks created so far */
 volatile unsigned int Tasks;
@@ -27,23 +26,80 @@ volatile unsigned int KernelActive;
 
 volatile unsigned char *KernelSp;
 
-volatile unsigned char *CurrentSp;\
+volatile unsigned char *CurrentSp;
 
+PID RunList[MINPRIORITY][MAXTHREAD];
+
+int PriorityCounts[MINPRIORITY];
+
+void Remove_From_RunList(PID pid) { 
+  PRIORITY currentPriority = Process[pid].priority;
+  int i = 0;
+    while(RunList[currentPriority][i] != pid) {
+      i++;
+    }
+    while(i<MAXTHREAD-1) {
+      RunList[currentPriority][i] = RunList[currentPriority][i+1];
+      i++;
+    }
+    PriorityCounts[currentPriority]--;
+}
+
+void Add_To_RunList(PID pid) {
+    int i=0;
+    PRIORITY py = Process[pid].priority;
+    RunList[py][PriorityCounts[py]] = pid;
+    PriorityCounts[py]++;
+}
+
+void Change_Priority(PID pid, PRIORITY py) {
+  
+  if (Process[pid].priority != py) {
+    Remove_From_RunList(pid);
+    Process[pid].priority = py;
+    Add_To_RunList(pid);
+  }
+}
+
+void NextP(PRIORITY py) {
+  PID p = RunList[py][0];
+  Remove_From_RunList(p);
+  Add_To_RunList(p);
+}
+
+int next = 0;
 
 static void Dispatch()
 {
   /* find the next READY task
       Note: if there is no READY task, then this will loop forever!.
   */
-  while (Process[NextP].state != READY) {
-    NextP = (NextP + 1) % MAXTHREAD;
+      
+/*  while (Process[next].state != READY) {
+    next = (next + 1) % MAXTHREAD;
   }
+*/
+    int breaker = 0;
+    //for each priority, starting from highest
+    for(int i = 0; i<MINPRIORITY;i++) {
+      //check each element, if one is found ready, the use it
+      for(int j = 0; j<PriorityCounts[i]; j++) {
+        if (Process[RunList[i][0]].state == READY) {
 
-  Cp = &(Process[NextP]);
+          Cp = &(Process[RunList[i][0]]);
+          breaker = 1;
+          break;
+        }
+
+        NextP(i);
+      }
+      if(breaker) break;
+    }
+
   CurrentSp = Cp->sp;
   Cp->state = RUNNING;
 
-  NextP = (NextP + 1) % MAXTHREAD;
+  NextP(Cp->priority);
 }
 
 void Task_Yield()
@@ -80,7 +136,7 @@ int  Task_GetArg(void) {
 }
 
 
-void Task_Suspend( PID p ) {
+void Kernel_Task_Suspend( PID p ) {
   //if already blocking, use BLOCKED_SUSPENDED state to indicate
   if (Process[p].state == BLOCKED) {
     Process[p].state = BLOCKED_SUSPENDED;
@@ -89,13 +145,23 @@ void Task_Suspend( PID p ) {
     Process[p].state = SUSPENDED;
   }
 
-  //if suspended ourself, enter kernel, otherwise continue (suspended process is not currently running so we dont need to stop anything)
-  if (p == Cp->pid) {
-    asm ( "call Enter_Kernel":: );
-  }
 } 
 
-void Task_Resume( PID p ) {
+
+void Task_Suspend(PID p) {
+  if(KernelActive){
+    Disable_Interrupt();
+    Cp->request = SUSPEND;
+    Cp->passthrough = p;
+
+    asm ( "call Enter_Kernel":: );
+  } else {
+    Kernel_Task_Suspend(p);
+  }
+
+}
+
+void Kernel_Task_Resume( PID p ) {
   //if called resume on self, has no effect, was obviously not suspended
   if(p != Cp->pid) {
     if(Process[p].state == BLOCKED_SUSPENDED) {
@@ -105,6 +171,20 @@ void Task_Resume( PID p ) {
       Process[p].state = READY;
     }
   }
+}
+
+void Task_Resume(PID p) {
+  if(KernelActive){
+    Disable_Interrupt();
+    Cp->request = RESUME;
+    Cp->passthrough = p;
+
+    asm ( "call Enter_Kernel":: );
+  } else {
+    //illegal operation
+    for(;;);
+  }
+
 }
 
 
@@ -153,6 +233,7 @@ static PID Kernel_Create_Task( voidfuncptr f, PRIORITY py, int arg )
   p->pid = x;
   p->priority = py;
 
+  Add_To_RunList(x);
 
   unsigned char *sp;
   //Changed -2 to -1 to fix off by one error.
@@ -205,12 +286,13 @@ int main() {
 
   Tasks = 0;
   KernelActive = 0;
-  NextP = 0;
   //Reminder: Clear the memory for the task on creation.
   for (x = 0; x < MAXTHREAD; x++) {
     memset(&(Process[x]), 0, sizeof(PD));
     Process[x].state = DEAD;
   }
+
+  memset(PriorityCounts,0,sizeof(int)*MINPRIORITY);
 
   //setup tasks
   a_main(0);
@@ -252,6 +334,7 @@ int main() {
       Cp->state = READY;
         Dispatch();
     } else {
+      Remove_From_RunList(Cp->pid);
       Cp->state = DEAD;
         Dispatch();
     }

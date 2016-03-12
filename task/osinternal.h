@@ -53,4 +53,6 @@ volatile extern unsigned int Tasks;
 
 volatile extern unsigned int KernelActive;
 
+void Change_Priority(PID pid, PRIORITY py);
+
 #endif
