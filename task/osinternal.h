@@ -4,14 +4,17 @@
 
 
 
-typedef void (*voidfuncptr) (void);      /* pointer to void f(void) */
+typedef void (*voidfuncptr) (int);      /* pointer to void f(void) */
 
 
 typedef enum process_states
 {
   DEAD = 0,
   READY,
-  RUNNING
+  RUNNING,
+  SUSPENDED,
+  BLOCKED,
+  BLOCKED_SUSPENDED
 } PROCESS_STATES;
 
 /**
@@ -28,6 +31,7 @@ typedef enum kernel_request_type
 
 typedef struct ProcessDescriptor
 {
+  PID pid;
   volatile unsigned char *sp;   /* stack pointer into the "workSpace" */
   unsigned char workSpace[WORKSPACE];
   PROCESS_STATES state;
@@ -36,7 +40,7 @@ typedef struct ProcessDescriptor
   PRIORITY priority;
   PRIORITY newpriority;
   int param;
-
+  int passthrough;
 } PD;
 
 
