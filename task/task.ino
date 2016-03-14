@@ -403,7 +403,6 @@ int main() {
   /* here we go...  */
   KernelActive = 1;
 
-  //Dispatch();  /* select a new task to run */
 
   while (1) {
     Dispatch();

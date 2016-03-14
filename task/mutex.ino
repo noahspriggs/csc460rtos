@@ -153,7 +153,7 @@ void Kernel_Mutex_Unlock_All(PID task) {
 	// called when a process is terminated, needs to release all the mutexes it holds
 	int i = 0;
 	int j = 0;
-	PIT temp = 0;
+	PID temp = 0;
   volatile MUTEX_DESCRIPTOR* mut = &(mutexes[0]);
 
 	temp = Cp->pid;
