@@ -75,7 +75,7 @@ void Kernel_Event_Signal(EVENT e)
 		if (evt->is_waiter)
 		{
 			// remove the waiter
-			evt->is_waiter = 1;
+			evt->is_waiter = 0;
 			evt->waiting = Cp->pid;
 
 			// and wake up that process
