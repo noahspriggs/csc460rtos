@@ -74,11 +74,7 @@ void Kernel_Event_Signal(EVENT e)
 		// if there is a process waiting
 		if (evt->is_waiter)
 		{
-			// remove the waiter
-			evt->is_waiter = 0;
-			evt->waiting = 0;
-
-			// and wake up that process
+			// wake up that process
 			if (Process[evt->waiting].state == BLOCKED)
 			{
 				Process[evt->waiting].state = READY;
@@ -92,6 +88,10 @@ void Kernel_Event_Signal(EVENT e)
 				// ILLEGAL STATE, LOOP FOREVER
 				for (;;);
 			}
+
+			// remove the waiter
+			evt->is_waiter = 0;
+			evt->waiting = 0;
 		}
 		else // there is no process waiting
 		{
