@@ -10,6 +10,11 @@ typedef struct mutex_descriptor {
 
 volatile static MUTEX_DESCRIPTOR mutexes[MAXMUTEX];
 volatile static unsigned int numberofmutexes = 0;
+volatile static unsigned int parent[MAXTHREAD] = { -1 };
+// the direct parent of a
+// task is the one that has the highest priority (lower number) in it's wait queue
+volatile static unsigned int reverse_parent[MAXTHREAD] = { -1 };
+volatile static unsigned int parent_reason[MAXTHREAD] = { -1 };
 
 MUTEX Kernel_Mutex_Init() {
 	MUTEX mid = numberofmutexes;
@@ -56,17 +61,29 @@ void Kernel_Mutex_Lock(MUTEX m) {
 
 		// promote the process with the lock to the highest priority in the queue
 		// or it's original priority, whichever is higher
-		PRIORITY current_min = mut->current_owner_original_priority;
+		PID highest_priority_waiting_task = mut->owner;
 		for (i = 0; i < mut->queue_length; i++)
 		{
-			if (Process[mut->queue[i]].pid < current_min)
+			if (Process[mut->queue[i]].priority < current_min)
 			{
-				current_min = Process[mut->queue[i]].pid;
+				highest_priority_waiting_task = i;
 			}
 		}
 
-		// actually set the new priority
-		Change_Priority(mut->owner, current_min);
+		if(highest_priority_waiting_task != mut->owner)
+		{
+			parent[mut->owner] = highest_priority_waiting_task;
+			reverse_parent[highest_priority_waiting_task] = mut->owner;
+			parent_reason[mut->owner] = m;
+		}
+
+		PID parent_follow = highest_priority_waiting_task;
+		while(reverse_parent[parent_follow] != -1) {
+			// actually set the new priority
+			Change_Priority(parent_follow, Process[reverse_parent[parent_follow]].priority);
+
+			parent_follow = reverse_parent[parent_follow];
+		}
 
 		// now block the current process
 		Cp->state = BLOCKED;
@@ -86,8 +103,15 @@ void Kernel_Mutex_Unlock(MUTEX m) {
 		// if the lock count is now zero
 		if (mut->locked == 0)
 		{
-			// set the current tasks priortity to its original priority
-			Change_Priority(Cp->pid, mut->current_owner_original_priority);
+			if(parent_reason[Cp->pid] == m)
+			{
+				// set the current tasks priority to its original priority
+				Change_Priority(Cp->pid, mut->current_owner_original_priority);
+
+				parent_reason[Cp->pid] = -1;
+				reverse_parent[parent[Cp->pid]] = -1;
+				parent[Cp->pid] = -1;
+			}
 
 			// is there someone waiting in the queue?
 			if (mut->queue_length > 0)
@@ -100,25 +124,34 @@ void Kernel_Mutex_Unlock(MUTEX m) {
 				// shuffle the queue along (and keep note of the max priortiy) becuase we need
 				// to promote the process with the lock to the highest priority in the queue
 				// or it's original priority, whichever is higher
-				PRIORITY current_min = mut->current_owner_original_priority;
-
+				PID highest_priority_waiting_task = mut->owner;
 				for (i = 1; i < mut->queue_length; i++)
 				{
-					// update maximum
-					if (Process[mut->queue[i]].pid < current_min)
+					if (Process[mut->queue[i]].priority < current_min)
 					{
-						current_min = Process[mut->queue[i]].pid;
+						highest_priority_waiting_task = i;
 					}
 
-					// shuffle queue along
 					mut->queue[i - 1] = mut->queue[i];
 				}
 
-				// actually set the new priority
-				Change_Priority(mut->owner, current_min);
-
 				// and shorten the queue
 				mut->queue_length--;
+
+				if(highest_priority_waiting_task != mut->owner)
+				{
+					parent[mut->owner] = highest_priority_waiting_task;
+					reverse_parent[highest_priority_waiting_task] = mut->owner;
+					parent_reason[mut->owner] = m;
+				}
+
+				PID parent_follow = highest_priority_waiting_task;
+				while(reverse_parent[parent_follow] != -1) {
+					// actually set the new priority
+					Change_Priority(parent_follow, Process[reverse_parent[parent_follow]].priority);
+
+					parent_follow = reverse_parent[parent_follow];
+				}
 
 				// now unblock the waiting process
 				if (Process[mut->owner].state == BLOCKED)
