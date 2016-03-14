@@ -74,7 +74,11 @@ void Kernel_Event_Signal(EVENT e)
 		// if there is a process waiting
 		if (evt->is_waiter)
 		{
-			// wake up that process
+			// remove the waiter
+			evt->is_waiter = 1;
+			evt->waiting = Cp->pid;
+
+			// and wake up that process
 			if (Process[evt->waiting].state == BLOCKED)
 			{
 				Process[evt->waiting].state = READY;
