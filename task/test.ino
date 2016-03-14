@@ -51,6 +51,8 @@ void Task_P1(int parameter)
     
     pin(1);
     Mutex_Unlock(mut1);
+    
+    pin(1);
     for(;;);
 }
 

@@ -126,9 +126,11 @@ void Task_Yield()
 
 void Task_Terminate()
 {
+
   if (KernelActive) {
     Disable_Interrupt();
     Cp->request = TERMINATE;
+
     asm ( "call Enter_Kernel":: );
   }
 }

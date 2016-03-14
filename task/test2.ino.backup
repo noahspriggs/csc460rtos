@@ -12,14 +12,37 @@
 MUTEX mut;
 volatile PID pid;
 volatile int q;
+
+void pin(int task) {
+  if (task == 1) {
+  PORTB &= ~(1 << PB3 );
+    PORTB |= (1 << PB2 ); 
+  PORTB &= ~(1<<PB1); //pin 52 off//51 on
+    for ( x = 0; x < 32000; ++x )q = x; /* do nothing */
+    } else if (task == 2) {
+    PORTB &= ~(1 << PB2 ); 
+      PORTB |= (1 << PB3 ); //51 off
+  PORTB &= ~(1<<PB1); //pin 52 off
+  
+    for ( x = 0; x < 32000; ++x )q = x;
+    } else {
+    PORTB &= ~(1 << PB2 ); 
+      PORTB &= ~(1 << PB3 ); //51 off
+  PORTB |= (1<<PB1);  //pin 52 on
+
+    for ( x = 0; x < 32000; ++x )q = x;
+    }
+}
+
 void Task_P1(int parameter)
 {
   int x;
+
     PORTB &= ~(1 << PB3 );
     PORTB |= (1 << PB2 ); 
   PORTB &= ~(1<<PB1); //pin 52 off//51 on
-
     for ( x = 0; x < 32000; ++x )q = x; /* do nothing */
+
   Task_Sleep(10); // sleep 100ms
     PORTB &= ~(1 << PB3 );
     PORTB |= (1 << PB2 ); 
