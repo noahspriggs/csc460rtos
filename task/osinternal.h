@@ -14,7 +14,9 @@ typedef enum process_states
   RUNNING,
   SUSPENDED,
   BLOCKED,
-  BLOCKED_SUSPENDED
+  BLOCKED_SUSPENDED,
+  SLEEPING,
+  SLEEPING_SUSPENDED
 } PROCESS_STATES;
 
 /**
@@ -25,7 +27,17 @@ typedef enum kernel_request_type
   NONE = 0,
   CREATE,
   NEXT,
-  TERMINATE
+  TERMINATE,
+  SUSPEND,
+  RESUME,
+  SLEEP,
+  GETARG,
+  MUTEX_INIT,
+  MUTEX_LOCK,
+  MUTEX_UNLOCK,
+  EVENT_INIT,
+  EVENT_WAIT,
+  EVENT_SIGNAL
 } KERNEL_REQUEST_TYPE;
 
 
@@ -54,5 +66,12 @@ volatile extern unsigned int Tasks;
 volatile extern unsigned int KernelActive;
 
 void Change_Priority(PID pid, PRIORITY py);
+
+MUTEX Kernel_Mutex_Init();
+void Kernel_Mutex_Lock(MUTEX m);
+void Kernel_Mutex_Unlock(MUTEX m); 
+EVENT Kernel_Event_Init(void);
+void Kernel_Event_Wait(EVENT e);
+void Kernel_Event_Signal(EVENT e);
 
 #endif

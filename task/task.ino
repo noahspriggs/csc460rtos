@@ -32,6 +32,8 @@ PID RunList[MINPRIORITY][MAXTHREAD];
 
 int PriorityCounts[MINPRIORITY];
 
+volatile int WakeUpTime[MAXTHREAD];
+
 void Remove_From_RunList(PID pid) { 
   PRIORITY currentPriority = Process[pid].priority;
   int i = 0;
@@ -69,7 +71,7 @@ void NextP(PRIORITY py) {
 
 int next = 0;
 
-static void Dispatch()
+static int Dispatch()
 {
   /* find the next READY task
       Note: if there is no READY task, then this will loop forever!.
@@ -94,12 +96,16 @@ static void Dispatch()
         NextP(i);
       }
       if(breaker) break;
+      if (i == MINPRIORITY-1) {
+        return 0;
+      }
     }
 
   CurrentSp = Cp->sp;
   Cp->state = RUNNING;
 
   NextP(Cp->priority);
+  return 1;
 }
 
 void Task_Yield()
@@ -111,11 +117,10 @@ void Task_Yield()
     Cp ->request = NEXT;
 
     
-  PORTL &= ~(1 << PL1);
     asm ( "call Enter_Kernel":: );
     
-  PORTL |= (1 << PL1);
-    Enable_Interrupt();
+  
+   // Enable_Interrupt();
   }
 }
 
@@ -141,6 +146,8 @@ void Kernel_Task_Suspend( PID p ) {
   if (Process[p].state == BLOCKED) {
     Process[p].state = BLOCKED_SUSPENDED;
   //from any other state new state = SUSPENDED
+  } else if (Process[p].state == SLEEPING) {
+    Process[p].state = SLEEPING_SUSPENDED;
   } else {
     Process[p].state = SUSPENDED;
   }
@@ -167,6 +174,8 @@ void Kernel_Task_Resume( PID p ) {
     if(Process[p].state == BLOCKED_SUSPENDED) {
       Process[p].state = BLOCKED;
 
+    } else if (Process[p].state == SLEEPING_SUSPENDED) {
+      Process[p].state = SLEEPING;
     } else {
       Process[p].state = READY;
     }
@@ -189,7 +198,21 @@ void Task_Resume(PID p) {
 
 
 void Task_Sleep(TICK t) {
+  if(KernelActive){
+    Disable_Interrupt();
+    Cp->request = SLEEP;
+    Cp->passthrough = t;
 
+    asm ( "call Enter_Kernel":: );
+  } else {
+     //illegal operation
+    for(;;);
+  }
+}
+
+void Kernel_Task_Sleep(TICK t) {
+  WakeUpTime[Cp->pid] = t+1;
+  Cp->state = SLEEPING;
 }
 
 PID  Task_Create( void (*f)(int), PRIORITY py, int arg) {
@@ -264,9 +287,14 @@ static PID Kernel_Create_Task( voidfuncptr f, PRIORITY py, int arg )
   *(unsigned char *)sp-- = ((unsigned int)f) & 0xff;
   *(unsigned char *)sp-- = (((unsigned int)f) >> 8) & 0xff;
 
-
   //Place stack pointer at top of stack
-  sp = sp - 35;
+  sp = sp - 25;
+
+  //pass the argument into the appropriate register
+  *(unsigned char *)sp-- = ((unsigned int)arg) & 0xff;
+  *(unsigned char *)sp-- = (((unsigned int)arg) >> 8) & 0xff;
+
+  sp = sp-8;
 
   p->sp = sp;   /* stack pointer into the "workSpace" */
   p->code = f;    /* function to be executed as a task */
@@ -281,20 +309,78 @@ static PID Kernel_Create_Task( voidfuncptr f, PRIORITY py, int arg )
 
 }
 
+void BackgroundTask(int parameter) {
+  for(;;) {
+  PORTL |= (1<<PL1);
+  Task_Yield();
+  
+  PORTL &= ~(1<<PL1);
+  }
+}
+
+volatile boolean ticks = 0;
+// timer3 isr
+ISR(TIMER3_COMPA_vect) {
+  PORTL |= (1<<PL0);
+  for(int i = 0; i<MAXTHREAD;i++) {
+    if(WakeUpTime[i]>1) {
+      WakeUpTime[i]--;    
+    } else if (WakeUpTime[i] == 1) {
+      WakeUpTime[i] = 0;
+      if(Process[i].state == SLEEPING_SUSPENDED) {
+        Process[i].state = SUSPENDED;  
+      } else {
+        Process[i].state = READY;  
+      }
+        
+    }
+  }
+  PORTL &= ~(1<<PL0);
+}
+
+void Timer_Init() {
+ 
+  //Clear timer config.
+  TCCR3A = 0;
+  TCCR3B = 0;
+  //Set to CTC (mode 4)
+  TCCR3B |= (1 << WGM32);
+
+  //Set prescaler to 256
+  TCCR3B |= (1 << CS02);
+
+  //Reset at counter of 61
+  OCR3A = 624; //this number should be (16*10^6) / (desired freq*prescaler) - 1
+
+  //Enable interupt A for timer 3.
+  TIMSK3 |= (1 << OCIE3A);
+
+  //Set timer to 0 (optional here).
+  TCNT3 = 0;
+  
+}
+
 int main() {
   int x;
 
+  Timer_Init();
+
+  
   Tasks = 0;
   KernelActive = 0;
   //Reminder: Clear the memory for the task on creation.
   for (x = 0; x < MAXTHREAD; x++) {
     memset(&(Process[x]), 0, sizeof(PD));
     Process[x].state = DEAD;
+    WakeUpTime[x] = 0;
   }
 
   memset(PriorityCounts,0,sizeof(int)*MINPRIORITY);
 
+
+  Task_Create(BackgroundTask,9,0);
   //setup tasks
+  
   a_main(0);
 
 
@@ -304,10 +390,10 @@ int main() {
   /* here we go...  */
   KernelActive = 1;
 
-  Dispatch();  /* select a new task to run */
+  //Dispatch();  /* select a new task to run */
 
   while (1) {
-    int x;
+    Dispatch();
     Cp->request = NONE; /* clear its request */
 
     /* activate this newly selected task */
@@ -328,15 +414,33 @@ int main() {
    // Cp->state = READY;
         //Dispatch();
     
+    Cp->state = READY;
+
     if (Cp->request == CREATE) {
         Kernel_Create_Task( Cp->code , Cp->newpriority, Cp->param);
     } else if (Cp->request == NONE || Cp->request == NEXT) {
-      Cp->state = READY;
-        Dispatch();
+      //DO NOTHING
+    } else if (Cp->request == SUSPEND) {
+      Kernel_Task_Suspend(Cp->passthrough);
+    } else if (Cp->request == RESUME) {
+      Kernel_Task_Resume(Cp->passthrough);
+    } else if (Cp->request == SLEEP) {
+      Kernel_Task_Sleep(Cp->passthrough);
+    } else if (Cp->request == MUTEX_INIT) {
+      Kernel_Mutex_Init();
+    } else if (Cp->request == MUTEX_LOCK) {
+      Kernel_Mutex_Lock(Cp->passthrough);
+    } else if (Cp->request == MUTEX_UNLOCK) {
+      Kernel_Mutex_Unlock(Cp->passthrough);
+    } else if (Cp->request == EVENT_INIT) {
+      Kernel_Event_Init();
+    } else if (Cp->request == EVENT_WAIT) {
+      Kernel_Event_Wait(Cp->passthrough);
+    } else if (Cp->request == EVENT_SIGNAL) {
+      Kernel_Event_Signal(Cp->passthrough);
     } else {
       Remove_From_RunList(Cp->pid);
       Cp->state = DEAD;
-        Dispatch();
     }
 
   }

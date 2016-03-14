@@ -20,7 +20,7 @@ EVENT Kernel_Event_Init(void)
 
 	numberofevents++;
 
-	EVENT_DESCRIPTOR* evt = &(events[eid]);
+	volatile EVENT_DESCRIPTOR* evt = &(events[eid]);
 	evt->signaled = 0;
 	evt->is_waiter = 0;
 	evt->waiting = 0;
@@ -31,7 +31,7 @@ EVENT Kernel_Event_Init(void)
 
 void Kernel_Event_Wait(EVENT e)
 {
-	EVENT_DESCRIPTOR* evt = &(events[e]);
+	volatile EVENT_DESCRIPTOR* evt = &(events[e]);
 
 	// if the event is already signaled
 	if (evt->signaled)
@@ -62,7 +62,7 @@ void Kernel_Event_Wait(EVENT e)
 
 void Kernel_Event_Signal(EVENT e)
 {
-	EVENT_DESCRIPTOR* evt = &(events[e]);
+	volatile EVENT_DESCRIPTOR* evt = &(events[e]);
 
 	// if the event is already signaled
 	if (evt->signaled)

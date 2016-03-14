@@ -21,7 +21,7 @@ MUTEX Kernel_Mutex_Init() {
 
 	numberofmutexes++;
 
-	MUTEX_DESCRIPTOR* mut = &(mutexes[mid]);
+	volatile MUTEX_DESCRIPTOR* mut = &(mutexes[mid]);
 
 	mut->locked = 0;
 	mut->owner = 0;
@@ -32,7 +32,7 @@ MUTEX Kernel_Mutex_Init() {
 }
 
 void Kernel_Mutex_Lock(MUTEX m) {
-	MUTEX_DESCRIPTOR* mut = &(mutexes[m]);
+	volatile MUTEX_DESCRIPTOR* mut = &(mutexes[m]);
 	int i = 0;
 
 	// check if the mutex is free first
@@ -74,7 +74,7 @@ void Kernel_Mutex_Lock(MUTEX m) {
 }
 
 void Kernel_Mutex_Unlock(MUTEX m) {
-	MUTEX_DESCRIPTOR* mut = &(mutexes[m]);
+	volatile MUTEX_DESCRIPTOR* mut = &(mutexes[m]);
 	int i = 0;
 
 	// is it our mutex?
