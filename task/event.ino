@@ -44,8 +44,7 @@ void Kernel_Event_Wait(EVENT e)
 	{
 		if (evt->is_waiter) // if there already is a process waiting
 		{
-			// ILLEGAL OPERATION, LOOP FOREVER, ONLY ONE PROCESS ALLOWED TO WAIT ON EVENT
-			for (;;);
+			return; // no-op
 		}
 		else
 		{
