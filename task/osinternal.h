@@ -73,5 +73,6 @@ void Kernel_Mutex_Unlock(MUTEX m);
 EVENT Kernel_Event_Init(void);
 void Kernel_Event_Wait(EVENT e);
 void Kernel_Event_Signal(EVENT e);
+void Kernel_Mutex_Unlock_All(PID p);
 
 #endif
