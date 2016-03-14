@@ -128,16 +128,29 @@ void Task_Terminate()
 {
   if (KernelActive) {
     Disable_Interrupt();
-    Cp -> request = TERMINATE;
+    Cp->request = TERMINATE;
     asm ( "call Enter_Kernel":: );
-    //Enter_Kernel();
-    /* never returns here! */
   }
+}
+
+void Kernel_Task_Terminate() {
+  Kernel_Mutex_Unlock_All(Cp->pid);
+  Remove_From_RunList(Cp->pid);
+  Cp->state = DEAD;
 }
 
 
 int  Task_GetArg(void) {
-  return Cp->param;
+  if(KernelActive){
+    Disable_Interrupt();
+    Cp->request = GETARG;
+
+    asm ( "call Enter_Kernel":: );
+
+    return Cp->passthrough;
+  } else {
+    for(;;);
+  }
 }
 
 
@@ -438,9 +451,10 @@ int main() {
       Kernel_Event_Wait(Cp->passthrough);
     } else if (Cp->request == EVENT_SIGNAL) {
       Kernel_Event_Signal(Cp->passthrough);
+    } else if (Cp->request == GETARG) {
+      Cp->passthrough = Cp->param;
     } else {
-      Remove_From_RunList(Cp->pid);
-      Cp->state = DEAD;
+      Kernel_Task_Terminate();
     }
 
   }
