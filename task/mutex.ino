@@ -87,7 +87,7 @@ void Kernel_Mutex_Unlock(MUTEX m) {
 		if (mut->locked == 0)
 		{
 			// set the current tasks priortity to its original priority
-			Cp->priority = mut->current_owner_original_priority;
+			Change_Priority(Cp->pid, mut->current_owner_original_priority);
 
 			// is there someone waiting in the queue?
 			if (mut->queue_length > 0)
@@ -147,6 +147,29 @@ void Kernel_Mutex_Unlock(MUTEX m) {
 		// ILLEGAL OPERATION, LOOP FOREVER
 		for (;;);
 	}
+}
+
+void Kernel_Mutex_Unlock_All(PID task) {
+	// called when a process is terminated, needs to release all the mutexes it holds
+	int i = 0;
+	int j = 0;
+	PIT temp = 0;
+  volatile MUTEX_DESCRIPTOR* mut = &(mutexes[0]);
+
+	temp = Cp->pid;
+	Cp->pid = task;
+
+	for(i = 0; i < numberofmutexes; i++) {
+		mut = &(mutexes[i]);
+
+		if(mut->owner == task) {
+			for(j = mut->locked; j > 0; j--) {
+				Kernel_Mutex_Unlock(i);
+			}
+		}
+	}
+
+	Cp->pid = temp;
 }
 
 MUTEX Mutex_Init(void) {
