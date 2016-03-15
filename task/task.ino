@@ -335,6 +335,7 @@ void BackgroundTask(int parameter) {
 
 volatile boolean ticks = 0;
 // timer3 isr
+/*
 ISR(TIMER3_COMPA_vect) {
   PORTL |= (1<<PL0);
   for(int i = 0; i<MAXTHREAD;i++) {
@@ -351,7 +352,7 @@ ISR(TIMER3_COMPA_vect) {
     }
   }
   PORTL &= ~(1<<PL0);
-}
+}*/
 
 void Timer_Init() {
  
@@ -378,7 +379,7 @@ void Timer_Init() {
 int main() {
   int x;
 
-  Timer_Init();
+  //Timer_Init();
 
   
   Tasks = 0;
@@ -393,7 +394,7 @@ int main() {
   memset(PriorityCounts,0,sizeof(int)*MINPRIORITY);
 
 
-  Task_Create(BackgroundTask,9,0);
+  Task_Create(BackgroundTask,MINPRIORITY-1,0);
   //setup tasks
   
   a_main(0);
